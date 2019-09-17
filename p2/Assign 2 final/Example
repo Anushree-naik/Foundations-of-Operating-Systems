@@ -1,0 +1,438 @@
+
+code Main
+
+  -- OS Class: Project 3
+  --
+  -- BENJAMIN REICHERT
+  --
+  -- REFERENCES:
+  -- http://web.cecs.pdx.edu/~harry/Blitz/OSProject/p3/SleepingBarberProblem.htm -- all the main customer and barber routines are just psudocode translations from here
+  -- https://github.com/lewisric/Frogs-N-Feels/blob/master/Project3/Main.c -- helped with blitz/kpl specifics (kpl is starting to make sense :) )
+  -- https://github.com/ladinu/cs333/blob/p5/p3/Main.c -- getting things to print properly according to expected outputs
+  -- http://web.cecs.pdx.edu/~walpole/class/cs333/fall2009/slides/13.pdf
+  -- 
+  -- CODENAME: Harry Porter and the Order of the Threads
+
+-----------------------------  Main  ---------------------------------
+
+  function main()
+      InitializeScheduler()
+      --SleepingBarber() -- run sleeping barber simulation
+      GamingParlor() -- run gaming parlor simulation
+      ThreadFinish()
+    endFunction
+
+  const
+    -- fill in constants
+    CHAIRS = 5  -- we have 5 chairs for all the customers to share
+    CUSTOMERS = 10  -- we have 10 customers
+    BARBERS = 1  -- one barber cutting hair
+  var
+    -- fill in vars
+    waiting: int = 0
+    customers: Semaphore = new Semaphore
+    barbers: Semaphore = new Semaphore
+    mutex: Mutex = new Mutex
+    barberThread: Thread = new Thread
+    customerThreads: array [CUSTOMERS] of Thread = new array of Thread { CUSTOMERS of new Thread }
+
+  function SleepingBarber()
+      -- intialize and test sleeping barber problem
+      customers.Init(0) -- set initial semaphore state to 0 since we havent done anything yet
+      barbers.Init(0)
+      mutex.Init()
+      
+
+      print("     Customer    1   2   3   4   5   6   7   8   9   10\n") -- getting printing to line up is HARD.
+      barberThread.Init("Barber")
+      barberThread.Fork(Barber, 1)  -- start runnign barber thread with Barber routine
+
+      -- initialize customer threads
+      customerThreads[0].Init("Customer 1")
+      customerThreads[0].Fork(TestLoop, 1)
+      
+      customerThreads[1].Init("Customer 2")
+      customerThreads[1].Fork(TestLoop, 2)
+  
+      customerThreads[2].Init("Customer 3")
+      customerThreads[2].Fork(TestLoop, 3)
+
+      customerThreads[3].Init("Customer 4")
+      customerThreads[3].Fork(TestLoop, 4)
+
+      customerThreads[4].Init("Customer 5")
+      customerThreads[4].Fork(TestLoop, 5)
+
+      customerThreads[5].Init("Customer 6")
+      customerThreads[5].Fork(TestLoop, 6)
+
+      customerThreads[6].Init("Customer 7")
+      customerThreads[6].Fork(TestLoop, 7)
+
+      customerThreads[7].Init("Customer 8")
+      customerThreads[7].Fork(TestLoop, 8)
+
+      customerThreads[8].Init("Customer 9")
+      customerThreads[8].Fork(TestLoop, 9)
+
+      customerThreads[9].Init("Customer 10")
+      customerThreads[9].Fork(TestLoop, 10)
+
+    endFunction
+
+  function TestLoop(customerID: int)
+      -- just forking to Customer was not enough testing since the first 5 customers would sit down
+      -- and then the rest would have to leave. this is an attempt to get threads waiting so when a customer
+      -- is done and gives up their seat another customer who walks in can take that seat. so we go 'round in 
+      -- circles 10 times to test
+      var
+        i: int
+      for i=1 to 10
+        Customer(customerID)
+      endFor
+    endFunction
+
+
+  -- customerID is used everywhere for printing methods
+  -- otherwise the methods would all be void types in the example
+  -- here: http://web.cecs.pdx.edu/~harry/Blitz/OSProject/p3/SleepingBarberProblem.htm
+
+  ------------ BARBER ------------
+  function Barber()
+      -- main barber routine
+      while(true)
+        customers.Down()  -- wait for customers to signal, so go to sleep
+        mutex.Lock()  -- a wild customer appears, we should hold the mutex lock
+        waiting = waiting - 1  -- one less customer is waiting now that we are helping them
+        barbers.Up() -- signal we are ready for a customer
+        mutex.Unlock() -- end critical section
+        CutHair() -- cut one of the customers who woke up hair
+      endWhile -- go around waiting and sleeping and cutting as necessary
+    endFunction
+
+  ------------ CUSTOMER ------------
+  function Customer(customerID: int)
+      -- main customer routine
+      mutex.Lock()
+      Enter(customerID) -- print that a customer entered the barber shop
+      if(waiting < CHAIRS) -- if the customer has a place to sit
+        waiting = waiting + 1 -- one more customer waiting now
+        Sit(customerID) -- print that a customer sat doen
+        customers.Up() -- signal that a customer showed up
+        mutex.Unlock() -- done with critical section
+        barbers.Down() -- wait for barber to say they are ready
+        GetHaircut(customerID) -- barber is cutting hair! so we get a haircut
+        Leave(customerID) -- we got a haircut, so print we left now
+      else
+        -- there was nowhere to sit so customer leaves
+        Leave(customerID)
+        mutex.Unlock()
+      endIf 
+    endFunction
+
+  function GetHaircut(customerID: int)
+      -- get a haircut wait time, and print methods
+      -- called by customer
+      var
+        i: int
+      mutex.Lock()
+      Begin(customerID) -- print
+      for i = 1 to 100
+        currentThread.Yield() -- loop is just spinning emulating time it takes to get a haircut
+      endFor
+
+      Finish(customerID) -- print we got a haircut!
+      
+      mutex.Unlock()
+    endFunction
+
+  function CutHair()
+      -- cut a customers hair
+      -- called by Barber()
+      -- this literally is a for loop to waste time
+      -- to "emulate" hair being cut
+      var
+        i: int
+      mutex.Lock()
+      Start()
+      for i=1 to 100  -- emulate cutting hair time taken by barber
+        currentThread.Yield() -- make other threads who want haircuts wait until we cut this persons hair
+        -- since we hold the mutex lock, only this customer gets their hair cut
+        -- this 'busy' wait is to emulate time taken to get a haircut, since it is not instant!
+      endFor
+      End()
+      mutex.Unlock()
+    endFunction
+
+
+  ---------- PRINT METHODS --------
+  -- E - ENTER
+  -- S - SIT IN CHAIR
+  -- B - BEGIN HAIRCUT
+  -- F - FINISH HAIRCUT
+  -- L - LEAVE
+
+  function Start()
+      PrintChairs()
+      print("start\n")
+    endFunction
+
+  function End()
+      PrintChairs()
+      print("end\n")
+    endFunction
+  
+  function Finish(customerID: int)
+      -- FINISH HAIRCUT
+      PrintChairs()
+      PrintThreadSpace(customerID)
+      print("F\n")
+    endFunction
+
+  function Begin(customerID: int)
+      -- BEGIN HAIRCUT
+      PrintChairs()
+      PrintThreadSpace(customerID)
+      print("B\n")
+    endFunction
+
+  function Enter(customerID: int)
+      -- ENTER BARBER SHOP
+      PrintChairs()
+      PrintThreadSpace(customerID)
+      print("E\n")
+    endFunction
+
+  function Sit(customerID: int)
+      -- SIT IN CHAIR
+      PrintChairs()
+      PrintThreadSpace(customerID)
+      print("S\n")
+    endFunction
+
+  function Leave(customerID: int)
+      -- LEAVE BARBER SHOP 
+      PrintChairs()
+      PrintThreadSpace(customerID)
+      print("L\n")
+    endFunction
+
+  function PrintChairs()
+      -- print seats
+      -- X means occupied
+      -- _ means empty seat
+      -- results in ex: |XX___| for two occupied seats, and three unoccupied seats
+      var
+        i: int
+      print("|")
+      for i = 1 to waiting
+        print("X")
+      endFor
+
+      -- print empty chairs
+      for i = 1 to CHAIRS - waiting
+       print("_")
+      endFor
+      print("|")
+    endFunction
+
+  function PrintThreadSpace(spaces: int)
+      -- depending on which thread is active when this is called sends spaces to stdout
+      -- so we can keep track of which thread is which. spaces is customerID. So if we have
+      -- customerID = 4, we print 4 spaces as '-' so we can count spaces
+      var
+        i: int
+      print("          ")
+      for i = 1 to (spaces - 1) * 4
+        print("-")
+      endFor
+    endFunction
+
+  ---------------- GAMING PARLOR -------------------
+
+    const
+      DICE = 8
+      BACKGAMMON_DICE = 4
+      RISK_DICE = 5
+      MONOPOLY_DICE = 2
+      PICTIONARY_DICE = 1
+      GROUPS = 8
+      -- players and their games they want to play:
+      -- A – Backgammon
+      -- B – Backgammon
+      -- C – Risk
+      -- D – Risk
+      -- E – Monopoly
+      -- F – Monopoly
+      -- G – Pictionary
+      -- H – Pictionary
+
+  class GameParlor
+    -- monitor for managing allocation of dice
+    -- we could choose two obvious solutions to the game parlor issue
+    -- 1. all groups fight at the desk for dice in a race
+    -- 2. we can be orderly and form a queue like most of western society
+    -- if we choose the first case, we risk starvation for a group of players (say A)
+    -- that want to play a game with more dice than are available. When signalled 
+    -- via broadcast methods, all threads would wake up and rush the desk for dice.
+    -- this can cause issues for the group A since someone might beat them to get dice.
+    -- this cycle could go on forever if someone is faster. This is also the core problem
+    -- with the chow hall problem
+    -- If we choose method 2 (which I did) then we eliminate starvation as any group is guaranteed at 
+    -- some point to be in the front of the line. This way once a group gets to the front of the line
+    -- they are guaranteed that any dice allocated will go to them and they will not have to fight
+    -- other groups for dice at the same time. Say 2 dice are available and group B wants 4. The desk
+    -- says to wait, but since they are first in line they are the only ones that will be woken up.
+    -- when 2 more dice are available, the first in line group B gets the dice and plays their game.
+    superclass Object
+    fields
+      lock: Mutex
+      numberDiceAvail: int
+      firstInLineGroup: Condition
+      waitingLineGroups: Condition
+      waitingLineGroupsCount: int
+
+    methods
+      Init()
+      Print(str: String, count: int)
+      Request(numberOfDice: int)
+      Return(numberOfDice: int)
+      
+  endClass
+
+  behavior GameParlor
+    method Init()
+        lock = new Mutex
+        lock.Init()
+        numberDiceAvail = DICE
+        waitingLineGroups = new Condition
+        waitingLineGroups.Init()
+        firstInLineGroup = new Condition
+        firstInLineGroup.Init()
+        waitingLineGroupsCount = 0 -- no one waiting yet
+      endMethod
+
+    method Request(numberOfDice: int)
+      -- when a group wants dice we call this
+      lock.Lock()
+      self.Print("requests", numberOfDice)
+      
+      waitingLineGroupsCount = waitingLineGroupsCount + 1
+
+      if waitingLineGroupsCount > 1
+        -- other groups in line, so get in line now!
+        waitingLineGroups.Wait(&lock) 
+      endIf
+      -- we are at the front of the line
+      -- but that doesnt guarantee that we have enough dice to play our game
+      -- so we spin waiting for dice
+      while numberOfDice > numberDiceAvail
+        -- since we are now front of line we wait with that condition variable
+        firstInLineGroup.Wait(&lock)
+      endWhile
+      -- now we are sure we have available dice, so take them!
+      numberDiceAvail = numberDiceAvail - numberOfDice
+      -- we arent waiting anymore so we dont need to be counted for
+      waitingLineGroupsCount = waitingLineGroupsCount - 1
+      waitingLineGroups.Signal(&lock)      
+
+      self.Print("proceeds with", numberOfDice)
+      lock.Unlock()
+      endMethod
+
+    method Return(numberOfDice: int)
+      -- when a group wants to give back dice we call this
+      lock.Lock()
+      -- we got dice back, so count them
+      numberDiceAvail = numberDiceAvail + numberOfDice
+      self.Print("releases and adds back", numberOfDice)
+      -- wake up first group in line since we now have dice available
+      firstInLineGroup.Signal(&lock) -- and hand it lock if if can
+      lock.Unlock()
+      endMethod
+
+
+    method Print (str: String, count: int)
+      --
+      -- This method prints the current thread's name and the arguments.
+      -- It also prints the current number of dice available.
+      --
+        print (currentThread.name)
+        print (" ")
+        print (str)
+        print (" ")
+        printInt (count)
+        nl ()
+        print ("------------------------------Number of dice now avail = ")
+        printInt (numberDiceAvail)
+        nl ()
+      endMethod
+  endBehavior
+
+
+    ----- FUNCTIONS TO RUN GAMEPARLOR -------------
+
+    var
+      frontDesk: GameParlor
+      groups: array [GROUPS] of Thread = new array of Thread { GROUPS of new Thread }
+
+    function GamingParlor()
+        -- run the simulation
+        frontDesk = new GameParlor
+        frontDesk.Init()
+
+        -- A – Backgammon - 4
+        -- B – Backgammon - 4
+        -- C – Risk - 5
+        -- D – Risk - 5
+        -- E – Monopoly - 2
+        -- F – Monopoly - 2
+        -- G – Pictionary - 1
+        -- H – Pictionary - 1
+
+       -- backgammon groups
+        groups[0].Init("A")
+        groups[0].Fork(TestGamingLoop, BACKGAMMON_DICE)
+        groups[1].Init("B")
+        groups[1].Fork(TestGamingLoop, BACKGAMMON_DICE)
+
+        -- RISK groups
+        groups[2].Init("C")
+        groups[2].Fork(TestGamingLoop, RISK_DICE)
+        groups[3].Init("D")
+        groups[3].Fork(TestGamingLoop, RISK_DICE)
+
+        -- Monopoly groups
+        groups[4].Init("E")
+        groups[4].Fork(TestGamingLoop, MONOPOLY_DICE)
+        groups[5].Init("F")
+        groups[5].Fork(TestGamingLoop, MONOPOLY_DICE)
+
+        -- Pictionary gorups
+        groups[6].Init("G")
+        groups[6].Fork(TestGamingLoop, PICTIONARY_DICE)
+        groups[7].Init("H")
+        groups[7].Fork(TestGamingLoop, PICTIONARY_DICE)
+
+      endFunction
+
+    function TestGamingLoop(dice: int)
+        -- function like TestLoop in barbers problem where we call into this method
+        -- from the fork of each thread where dice = groupID, where groupId is the id of the
+        -- group that wants to play a game. This simulates multiple groups interacting since
+        -- we go through the loop 5 times which gives us thread interactions and concurrency
+        var
+          i,j : int
+        for i = 1 to 5
+          frontDesk.Request(dice)
+          for j = 1 to 100
+            currentThread.Yield()
+          endFor
+          frontDesk.Return(dice)
+          for j = 1 to 100
+            currentThread.Yield()
+          endFor
+        endFor
+      endFunction
+
+endCode
